@@ -111,7 +111,7 @@ UserDropDown.prototype._addUserAvatar = function($item, item) {
   // Иначе будет просто заглушка там
   if (item.avatar) {
     $img = document.createElement('img');
-    $img.src = '/img/' + item.avatar;
+    $img.src = 'img/' + item.avatar;
     $img.classList.add('user-dropdown-item-img');
     $avatar.appendChild($img);
   }
