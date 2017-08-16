@@ -25,6 +25,7 @@ function DropDown(container, options) {
 
   // Делаем отложенный вызов, чтобы при быстром вводе не делалось 100500 запросов
   this._onSearch = utils.bounce(this._onSearch, 300, this);
+  this._handleEvent = this._handleEvent.bind(this);
 
   this.create();
   this.setItems(options.items);
@@ -76,21 +77,14 @@ DropDown.prototype.destroy = function() {
 
   this._$container.innerHTML = '';
 
+  // Отписываем все листенеры
+  Object.keys(this._listeners).forEach(function(event) {
+    this._$container.removeEventListener(event, this._handleEvent);
+  }.bind(this));
+
   this._resetValues()
 
   return this;
-};
-
-/**
- * Сбрасывает все значения
- */
-DropDown.prototype._resetValues = function() {
-  this._$input = null;
-  this._$popup = null;
-  this._$list = null;
-  this._$noData = null;
-
-  this._value = (this._multi ? [] : null);
 };
 
 /**
@@ -140,6 +134,74 @@ DropDown.prototype.setItems = function(items) {
 };
 
 /**
+ * Сбрасывает все значения
+ */
+DropDown.prototype._resetValues = function() {
+  this._$input = null;
+  this._$popup = null;
+  this._$list = null;
+  this._$noData = null;
+
+  this._listeners = {};
+
+  this._value = (this._multi ? [] : null);
+};
+
+/**
+ * Подписывает элемент на события
+ *
+ * @param {String} event
+ * @param {HTMLElement} elem
+ * @param {Function} callback
+ */
+DropDown.prototype._on = function(event, elem, callback) {
+  // Если такое событие еще не слушается, то вешаем на него хендлер
+  if (!this._listeners[event]) {
+    this._listeners[event] = [];
+    this._$container.addEventListener(event, this._handleEvent);
+  }
+
+  this._listeners[event].push({ elem: elem, cb: callback });
+};
+
+/**
+ * Обработчик для делегирования события на дропдауне
+ *
+ * @param {Event} e
+ */
+DropDown.prototype._handleEvent = function(e) {
+  var listeners = this._listeners[e.type];
+  var target;
+  var i;
+  var j;
+  var iEnd;
+  var jEnd;
+
+  if (!listeners || !listeners.length) {
+    return;
+  }
+
+  // Проходим по всем элементам, которые затронуты(типа всплытие)
+  for (i = 0, iEnd = e.path.length; i < iEnd; i++) {
+    target = e.path[i];
+
+    // Проходим по всем, кто подписан
+    for (var j = 0, jEnd = listeners.length; j < jEnd; j++) {
+      // Находим нужный элемент и его колбек
+      if (listeners[j].elem === target) {
+        listeners[j].cb.call(this, e);
+        return;
+      }
+    }
+
+    // Дальше контейнера идти не надо
+    if (target === this._$container) {
+      return;
+    }
+  }
+};
+
+/**
  * Создает блок с текущим значением дропдауна
  *
  * @return {HTMLElement}
@@ -169,7 +231,7 @@ DropDown.prototype._addValueIcon = function($value) {
   $icon.classList.add('dropdown-value-icon');
 
   // По клику на иконку тоглим состояние видимости списка
-  $icon.addEventListener('mousedown', function(e) {
+  this._on('mousedown', $icon, function(e) {
     e.preventDefault();
     e.stopPropagation();
 
@@ -178,8 +240,7 @@ DropDown.prototype._addValueIcon = function($value) {
     } else {
       this._$input.focus();
     }
-
-  }.bind(this));
+  });
 
   $value.appendChild($icon);
 };
@@ -198,11 +259,11 @@ DropDown.prototype._addValueClear = function($value) {
 
   $clear.classList.add('dropdown-value-clear');
 
-  $clear.addEventListener('mousedown', function(e) {
+  this._on('mousedown', $clear, function(e) {
     e.preventDefault();
     e.stopPropagation();
     this._onRemoveCurrentItem();
-  }.bind(this));
+  });
 
   $value.appendChild($clear);
 };
@@ -272,6 +333,12 @@ DropDown.prototype._addValueInput = function($value) {
     this._$container.classList.remove('dropdown_open');
   }.bind(this));
 
+  // По нажатию на элемент ставим фокус
+  this._on('mousedown', $value, function(e) {
+    e.preventDefault();
+    this._$input.focus();
+  });
+
   $value.appendChild(this._$input);
 };
 
@@ -304,9 +371,9 @@ DropDown.prototype._addValueHiddenInput = function($value) {
   $value.appendChild(this._$input);
 
   // По нажатию на элемент ставим фокус
-  $value.addEventListener('mousedown', function(e) {
+  this._on('mousedown', $value, function(e) {
     e.preventDefault();
-    that._$input.focus();
+    this._$input.focus();
   });
 };
 
@@ -367,10 +434,10 @@ DropDown.prototype._createCurrentItem = function(item) {
 
   // Удаление значения
   $del.classList.add('dropdown-current-item-delete');
-  $del.addEventListener('click', function() {
+  this._on('click', $del, function(e) {
     $item.parentNode.removeChild($item);
     this._onRemoveCurrentItem(item);
-  }.bind(this));
+  });
   $item.appendChild($del);
 
   $title.textContent = item.title;
@@ -403,8 +470,8 @@ DropDown.prototype._showList = function(items) {
       var $item = that._createItem(item);
 
       // Вешаем хендлер на выбор пункта
-      $item.addEventListener('mousedown', function() {
-        that._onSelect($item, item);
+      that._on('mousedown', $item, function() {
+        this._onSelect($item, item);
       });
 
       that._$list.appendChild($item);
